@@ -50,60 +50,60 @@
 
 	--2. Last floor of each winning run
 	--Skills used: Subquery, CTE, SELECT INTO Temp Table, CASE, PARTITION OVER, Aggregate Functions, CAST, Joins, Union All
-			--Solution 1 Using gameplay_events
-				SELECT resource_two, COUNT(resource_two) AS total_wins
-				FROM gameplay_events 
-				WHERE event_type = 16
-				AND latest = true
-				GROUP BY resource_two
-				ORDER BY COUNT(resource_two) DESC
-			
-			--Solution 2 using only played_floors and temp table
-				DROP TABLE IF EXISTS last_floors
+		--Solution 1 Using gameplay_events
+			SELECT resource_two, COUNT(resource_two) AS total_wins
+			FROM gameplay_events 
+			WHERE event_type = 16
+			AND latest = true
+			GROUP BY resource_two
+			ORDER BY COUNT(resource_two) DESC
 
-				-- Create Temp table containing ending floor_number for each run
-				SELECT MAX(id) AS id, played_character AS run_number, MAX(floor_number) AS floor_number
-				INTO TEMP last_floors
-				FROM played_floors
-				WHERE latest = true
-				GROUP BY played_character
-				ORDER BY  played_character
+		--Solution 2 using only played_floors and temp table
+			DROP TABLE IF EXISTS last_floors
 
-				--Join to add name of floor and count of wins for each floor
-				SELECT a.floor, COUNT(b.run_number) AS total_wins
-				FROM played_floors a
-				RIGHT JOIN last_floors b
-				ON a.id = b.id
-				WHERE died_from IS NULL
-				GROUP BY a.floor
-				ORDER BY total_wins DESC
+			-- Create Temp table containing ending floor_number for each run
+			SELECT MAX(id) AS id, played_character AS run_number, MAX(floor_number) AS floor_number
+			INTO TEMP last_floors
+			FROM played_floors
+			WHERE latest = true
+			GROUP BY played_character
+			ORDER BY  played_character
 
-			--Bonus: Last floor of each run, whether it was a win or a loss, a running total of number of wins win percentage
-				WITH win_percent AS
+			--Join to add name of floor and count of wins for each floor
+			SELECT a.floor, COUNT(b.run_number) AS total_wins
+			FROM played_floors a
+			RIGHT JOIN last_floors b
+			ON a.id = b.id
+			WHERE died_from IS NULL
+			GROUP BY a.floor
+			ORDER BY total_wins DESC
+
+		--Bonus: Last floor of each run, whether it was a win or a loss, a running total of number of wins win percentage
+			WITH win_percent AS
+			(
+				-- Use CTE to calculate running wins and losses based of 'result' column created below.
+				WITH win_losses AS
 				(
-					-- Use CTE to calculate running wins and losses based of 'result' column created below.
-					WITH win_losses AS
-					(
-						-- Use Join as in previous query to get the last floor of each run
-						-- Use CASE to determine if run is Win or Loss based off 'died_from' column
-						SELECT b.run_number, a.floor, b.floor_number
-						, CASE
-							WHEN a.died_from IS NULL THEN 'Win'
-							WHEN a.died_from IS NOT NULL THEN 'Loss'
-							END result
-						FROM played_floors a
-						RIGHT JOIN last_floors b
-						ON a.id = b.id
-					)
-					-- Use Window Function to add running totals of Wins and total runs.
-					SELECT *, SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) OVER (ORDER BY run_number) AS running_wins
-					, COUNT(result) OVER (ORDER BY run_number) AS total_runs
-					FROM win_losses
-					ORDER BY run_number
+					-- Use Join as in previous query to get the last floor of each run
+					-- Use CASE to determine if run is Win or Loss based off 'died_from' column
+					SELECT b.run_number, a.floor, b.floor_number
+					, CASE
+						WHEN a.died_from IS NULL THEN 'Win'
+						WHEN a.died_from IS NOT NULL THEN 'Loss'
+						END result
+					FROM played_floors a
+					RIGHT JOIN last_floors b
+					ON a.id = b.id
 				)
-				-- Use CTE to calculate running win percentage based on running totals created above.
-				SELECT *, TRUNC((CAST(running_wins AS DEC)/total_runs)*100, 2) AS win_percentage
-				FROM win_percent
+				-- Use Window Function to add running totals of Wins and total runs.
+				SELECT *, SUM(CASE WHEN result = 'Win' THEN 1 ELSE 0 END) OVER (ORDER BY run_number) AS running_wins
+				, COUNT(result) OVER (ORDER BY run_number) AS total_runs
+				FROM win_losses
+				ORDER BY run_number
+			)
+			-- Use CTE to calculate running win percentage based on running totals created above.
+			SELECT *, TRUNC((CAST(running_wins AS DEC)/total_runs)*100, 2) AS win_percentage
+			FROM win_percent
 
 
 	--3. Create a table that has the standard floors and floor order
@@ -114,16 +114,17 @@
 		DROP TABLE IF EXISTS standard_floors
 
 		--Determine floor_order from Isaac Wiki
-		SELECT floor, CASE
-						WHEN floor LIKE 'Basement%' OR floor LIKE 'Cellar%' OR floor LIKE 'BurningBase%' THEN 1
-						WHEN floor LIKE 'Downpour%' OR floor LIKE 'Dross%' THEN 1.5
-						WHEN floor LIKE 'Caves%' OR floor LIKE 'Catacombs%' OR floor LIKE 'Flooded%' OR floor LIKE 'Mines%' OR floor LIKE 'Ashpit%' THEN 2
-						WHEN floor LIKE 'Depths%' OR floor LIKE 'Necropolis%' OR floor LIKE 'DankDepths%' OR floor LIKE 'Mausoleum%' OR floor LIKE 'Gehenna%' THEN 3
-						WHEN floor LIKE 'Womb%' OR floor LIKE 'Utero%' OR floor LIKE 'Scarred%' OR floor = 'Home' THEN 4
-						WHEN floor LIKE 'Blue%' OR floor LIKE 'Corpse%' THEN 4.5
-						WHEN floor = 'Cathedral' OR floor = 'Sheol' OR floor = 'TheVoid' THEN 5
-						WHEN floor = 'Chest' OR floor ='DarkRoom' THEN 6
-					END AS floor_order
+		SELECT floor, 
+			CASE
+				WHEN floor LIKE 'Basement%' OR floor LIKE 'Cellar%' OR floor LIKE 'BurningBase%' THEN 1
+				WHEN floor LIKE 'Downpour%' OR floor LIKE 'Dross%' THEN 1.5
+				WHEN floor LIKE 'Caves%' OR floor LIKE 'Catacombs%' OR floor LIKE 'Flooded%' OR floor LIKE 'Mines%' OR floor LIKE 'Ashpit%' THEN 2
+				WHEN floor LIKE 'Depths%' OR floor LIKE 'Necropolis%' OR floor LIKE 'DankDepths%' OR floor LIKE 'Mausoleum%' OR floor LIKE 'Gehenna%' THEN 3
+				WHEN floor LIKE 'Womb%' OR floor LIKE 'Utero%' OR floor LIKE 'Scarred%' OR floor = 'Home' THEN 4
+				WHEN floor LIKE 'Blue%' OR floor LIKE 'Corpse%' THEN 4.5
+				WHEN floor = 'Cathedral' OR floor = 'Sheol' OR floor = 'TheVoid' THEN 5
+				WHEN floor = 'Chest' OR floor ='DarkRoom' THEN 6
+			END AS floor_order
 		INTO standard_floors
 		FROM played_floors
 		GROUP BY floor
@@ -131,6 +132,9 @@
 		--Remove floors associated with alternate game modes
 		DELETE FROM standard_floors
 		WHERE floor LIKE 'Greed%' OR floor LIKE 'Arena%' OR floor LIKE 'Missing%'
+		--Alternatively, drop floors not assigned a floor_order above
+		DELETE FROM standard_floors
+		WHERE floor_order IS NULL
 
 	--4. Use created standard_floor table to look at item pickup information from gameplay_events
 	--Skills used: SELECT INTO Temp Table, Multiple Joins

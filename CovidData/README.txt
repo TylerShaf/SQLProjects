@@ -1,0 +1,1 @@
+This is my first SQL Project following along with Alex the Analyst's Youtube video.

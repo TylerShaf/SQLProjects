@@ -226,7 +226,7 @@
 		FROM videos
 
 		--Total hours played
-		SELECT SUM(duration)/360 AS hours_played
+		SELECT SUM(duration)/3600 AS hours_played
 		FROM videos
 		
 		--Number of episodes with multiple wins in the same video
